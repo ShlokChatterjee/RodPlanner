@@ -11,6 +11,7 @@ dependencies = [
     "shapely>=2.0",
     "numpy",
     "fastapi",
+    "python-multipart",
     "uvicorn[standard]",
 ]
 
@@ -20,6 +21,7 @@ dev = [
     "pytest-cov",
     "ruff>=0.4",
     "mypy>=1.9",
+    "httpx",
 ]
 
 [tool.setuptools.packages.find]

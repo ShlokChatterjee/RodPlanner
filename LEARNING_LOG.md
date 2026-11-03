@@ -292,3 +292,79 @@ image files. No binary files in the repo, no file I/O in tests, fast execution.
 | **`pixels_per_metre`** | Scale factor: how many image pixels represent one real-world metre |
 
 ---
+
+## Checkpoint 4 — API layer (FastAPI)
+
+**Date:** 2026-11-02
+
+### What we built
+
+| File | Purpose |
+|------|---------|
+| `src/rodplanner/api/models.py` | Pydantic request/response models (`RodOut`, `AnalyseResponse`, `AnalyseParams`) |
+| `src/rodplanner/api/pipeline.py` | `run_pipeline()` — orchestrates all four modules end-to-end |
+| `src/rodplanner/api/routes.py` | FastAPI router: `GET /health`, `POST /analyse` |
+| `src/rodplanner/api/app.py` | FastAPI app creation |
+| `tests/api/test_pipeline.py` | 8 unit tests for the pipeline function |
+| `tests/api/test_routes.py` | 8 HTTP integration tests via TestClient |
+
+**Total: 63 tests passing. Lint: clean.**
+
+### How the full pipeline flows
+
+```
+POST /analyse (image file + params)
+  → decode image bytes → NumPy array (cv2.imdecode)
+  → extract_footprint()     [vision]
+  → place_rods()            [placement]
+  → sample_grid()           [geometry]
+  → coverage_fraction()     [placement/metrics]
+  → AnalyseResponse (JSON)
+```
+
+For the first time all four modules connect. The API layer owns none of the
+domain logic — it wires the modules together and translates between HTTP concepts
+(files, form fields, status codes) and domain concepts (images, polygons, rods).
+
+### Key decisions and why
+
+**1. Pydantic for request/response**
+`Field(gt=0)` on `height` means FastAPI returns a clear 422 if the caller sends
+`height=-1`. Without this, bad input silently propagates and causes a cryptic error
+deep inside the geometry code.
+
+*What we rejected:* plain dicts or dataclasses — no automatic JSON serialisation,
+no OpenAPI schema, no validation.
+
+**2. `Depends()` for query parameters**
+`params: AnalyseParams = Depends()` reads all fields of `AnalyseParams` from the
+query string as a unit. The alternative (one `Query()` per field) duplicates the
+field definitions in the route signature.
+
+**3. Domain errors → HTTP 422**
+`ValueError` from the pipeline is caught in the route and re-raised as
+`HTTPException(422)`. The pipeline stays ignorant of HTTP; the route translates.
+
+**4. `python-multipart` as a runtime dependency**
+FastAPI needs it to handle file uploads. It belongs in runtime dependencies
+(not just dev) because the deployed server needs it, not just the test suite.
+
+**5. TestClient for HTTP tests**
+Runs the full FastAPI app in-process — no real server, no ports. Tests send real
+HTTP requests and get real JSON at unit-test speed.
+
+### Vocabulary to know
+
+| Term | Meaning |
+|------|---------|
+| **Pydantic** | Data validation library; powers FastAPI's request/response handling |
+| **`BaseModel`** | Pydantic's base class; validates fields automatically on creation |
+| **`Field(gt=0)`** | Field constraint: "greater than 0"; enforced at parse time |
+| **`UploadFile`** | FastAPI type for file uploads; provides filename, content-type, async `read()` |
+| **`Depends()`** | FastAPI dependency injection; validates a group of parameters automatically |
+| **`HTTPException`** | FastAPI's way to return HTTP error responses |
+| **422 Unprocessable Entity** | HTTP status: "I understood the request but the data is invalid" |
+| **TestClient** | Runs FastAPI HTTP requests in-process without a real server |
+| **`python-multipart`** | Required for parsing multipart form data (file uploads) in FastAPI |
+
+---
