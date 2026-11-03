@@ -216,3 +216,79 @@ without touching the placement algorithm.
 | **`coverage_fraction`** | Fraction of roof sample points protected by at least one rod (0.0-1.0) |
 
 ---
+
+## Checkpoint 3 — Vision pipeline (classical OpenCV)
+
+**Date:** 2026-11-02
+
+### What we built
+
+| File | Purpose |
+|------|---------|
+| `src/rodplanner/vision/models.py` | `VisionParams` frozen dataclass |
+| `src/rodplanner/vision/extractor.py` | `extract_footprint()` and `load_and_extract()` |
+| `tests/vision/test_extractor.py` | 8 tests using synthetic in-memory images |
+
+**Total: 47 tests passing. Lint: clean.**
+
+### The pipeline
+
+```
+image (grayscale or BGR)
+  → grayscale conversion
+  → Gaussian blur          (reduce noise)
+  → Otsu threshold         (auto binarise: building=white, background=black)
+  → morphological close    (fill wall gaps / doorways)
+  → find external contours (outermost shapes only)
+  → largest contour        (= building outline)
+  → Douglas-Peucker        (simplify jagged pixel boundary to clean polygon)
+  → scale pixels → metres
+  → Shapely Polygon
+```
+
+### Key decisions and why
+
+**1. Otsu's threshold over a fixed value**
+Otsu automatically finds the best threshold by analysing the image's pixel
+intensity histogram. A fixed value (e.g. 127) would fail on dim scans,
+high-contrast plans, or images with different lighting. Otsu works on any image
+where the building and background form two distinct peaks in the histogram.
+
+**2. Morphological close**
+`cv2.MORPH_CLOSE` is a dilation followed by an erosion. It fills small dark
+gaps (doorways, scan artefacts) in the bright wall boundaries. Without it, a
+wall with a gap splits into two separate contours and the algorithm may pick
+the wrong one as the building outline.
+
+**3. Douglas-Peucker simplification**
+The raw pixel contour has hundreds of vertices — one per boundary pixel. The
+algorithm reduces these to the fewest vertices that stay within `epsilon`
+pixels of the original curve. This converts a jagged digital boundary into a
+clean polygon suitable for the geometry/placement modules.
+
+*What we rejected:*
+- **Canny edge detection + Hough lines**: good for finding straight walls but
+  requires assembling detected line segments back into a closed polygon, which
+  is fragile for irregular shapes.
+- **Neural segmentation model (CubiCasa5K)**: more accurate on messy real-world
+  plans but requires a trained model, GPU inference, and dataset licensing.
+  Planned as a future upgrade; classical CV is sufficient for clean plans.
+
+**4. Tests use synthetic in-memory images**
+We draw rectangles and L-shapes directly as NumPy arrays instead of loading
+image files. No binary files in the repo, no file I/O in tests, fast execution.
+
+### Vocabulary to know
+
+| Term | Meaning |
+|------|---------|
+| **Grayscale** | Single-channel image where each pixel is a brightness value (0-255) |
+| **BGR** | OpenCV's default colour format: Blue-Green-Red (not RGB) |
+| **Otsu's threshold** | Algorithm that automatically finds the best binary threshold from the pixel histogram |
+| **Morphological close** | Dilation then erosion: fills small holes and gaps in a binary image |
+| **Contour** | A curve joining all continuous points of the same intensity boundary in a binary image |
+| **`RETR_EXTERNAL`** | Find only outermost contours (skips internal shapes like rooms) |
+| **Douglas-Peucker** | Algorithm that simplifies a polyline to fewer points within a tolerance |
+| **`pixels_per_metre`** | Scale factor: how many image pixels represent one real-world metre |
+
+---
