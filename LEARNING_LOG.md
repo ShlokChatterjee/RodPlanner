@@ -86,3 +86,69 @@ ruff check .               # should show no errors
 ```
 
 ---
+
+## Checkpoint 1 — Geometry core
+
+**Date:** 2026-11-02
+
+### What we built
+
+| File | Purpose |
+|------|---------|
+| `src/rodplanner/geometry/polygon.py` | Create and validate polygons; extract corners |
+| `src/rodplanner/geometry/sampling.py` | Fill a polygon with a grid of sample points |
+| `src/rodplanner/geometry/coverage.py` | Compute a rod's protection radius; check which sample points it covers |
+| `tests/geometry/test_polygon.py` | 8 tests |
+| `tests/geometry/test_sampling.py` | 6 tests |
+| `tests/geometry/test_coverage.py` | 11 tests |
+
+**Total: 26 tests, all passing. Lint: clean.**
+
+### Key decisions and why
+
+**1. Shapely for polygon math**  
+Shapely is the standard Python library for 2D geometry. It handles containment checks,
+area computation, boundary sampling, and more. The alternative (writing the geometry from
+scratch) would be hundreds of lines of error-prone math. Shapely 2.x added vectorised
+operations (e.g. `contains_xy`) that are implemented in C — much faster than calling
+Python methods in a loop.
+
+**2. (N, 2) NumPy arrays for point collections**  
+All collections of points are represented as NumPy arrays of shape `(N, 2)`, not as
+lists of tuples. This lets us do math on all N points at once ("vectorised"). For
+example, `dx = sample_points[:, 0] - rod_x` subtracts the rod's x-coordinate from
+every point's x in one line, with no for-loop. The alternative (iterating in Python)
+is roughly 100× slower on a large roof.
+
+**3. Cell-centred grid sampling**  
+We offset the grid by `resolution / 2` so each sample point sits at the centre of a
+grid cell, not on the cell boundary. Without this, points on the polygon edges are not
+counted as "inside" (Shapely's `contains` is strict), which would under-count coverage
+near the walls — exactly where rods matter most.
+
+**4. Squared-distance comparison in coverage check**  
+`(dx² + dy²) ≤ radius²` avoids computing a square root. `sqrt` is slow; squaring both
+sides gives the same True/False result. This is a standard micro-optimisation in
+computational geometry.
+
+**5. Geometry separated from placement**  
+`coverage.py` only answers "does one rod cover these points?" It does not decide where
+to place rods. That decision lives in `placement/` (Checkpoint 2). The separation means
+we can swap the placement algorithm (greedy → rolling sphere) without touching the
+coverage math, and we can unit-test the coverage function alone.
+
+### Vocabulary to know
+
+| Term | Meaning |
+|------|---------|
+| **Shapely Polygon** | A 2D shape defined by a closed ring of (x, y) points |
+| **`polygon.bounds`** | The axis-aligned bounding box: `(min_x, min_y, max_x, max_y)` |
+| **`polygon.exterior`** | The outer ring of the polygon (as opposed to holes) |
+| **Vectorised operation** | A NumPy operation applied to an entire array at once, compiled in C — no Python loop |
+| **`(N, 2)` array** | A NumPy array with N rows and 2 columns; each row is one (x, y) point |
+| **Boolean mask** | A NumPy array of `True`/`False` values used to select elements from another array |
+| **Cell-centred sampling** | Placing grid points at cell centres (offset by half the spacing) so none fall exactly on boundaries |
+| **`pytest.approx`** | A pytest helper for comparing floating-point numbers with a small tolerance |
+| **Protection cone model** | A rod at height h protects a circle of radius r = h × tan(α) on the roof surface |
+
+---
