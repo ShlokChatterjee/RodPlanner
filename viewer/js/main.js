@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { buildBuilding, polygonCentre } from './building.js';
 import { buildRods } from './rods.js';
+import { planToWorld } from './coords.js';
 
 // ── load data ────────────────────────────────────────────────────────────────
 
@@ -29,14 +30,15 @@ const camera = new THREE.PerspectiveCamera(
 );
 
 // Point the camera at the building centre, offset at an angle
-const centre = polygonCentre(data.polygon);
-camera.position.set(centre.x + 20, 18, centre.y + 20);
-camera.lookAt(centre.x, 0, centre.y);
+const c = polygonCentre(data.polygon);
+const centre = planToWorld(c.x, c.y);  // world-space centre of the footprint
+camera.position.set(centre.x + 20, 18, centre.z + 20);
+camera.lookAt(centre.x, 0, centre.z);
 
 // ── orbit controls ───────────────────────────────────────────────────────────
 
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(centre.x, 0, centre.y);
+controls.target.set(centre.x, 0, centre.z);
 controls.enableDamping = true;
 controls.dampingFactor = 0.06;
 controls.minDistance = 5;
@@ -80,9 +82,47 @@ scene.add(grid);
 
 // ── building + rods ──────────────────────────────────────────────────────────
 
-const buildingHeight = data.rods.length > 0 ? data.rods[0].height : 3.0;
-scene.add(buildBuilding(data.polygon, buildingHeight));
-scene.add(buildRods(data.rods));
+// Building height and rod height are different things: rod.height is how far
+// the rod sticks up above the roof. The API does not return a building
+// height yet, so fall back to a default when the JSON has none.
+const DEFAULT_BUILDING_HEIGHT_M = 3.0;
+const buildingHeight = data.building_height ?? DEFAULT_BUILDING_HEIGHT_M;
+const building = buildBuilding(data.polygon, buildingHeight);
+scene.add(building);
+const rodGroup = buildRods(data.rods, buildingHeight);
+scene.add(rodGroup);
+
+// ── self-check: every rod must stand on the roof ─────────────────────────────
+// Take each rod mesh exactly where it was drawn and cast a ray straight down
+// from above it. If the building and the rods were mapped to world space
+// differently (the original bug), the ray misses the roof and we say so,
+// instead of silently drawing a wrong scene.
+building.updateMatrixWorld(true);
+const ray = new THREE.Raycaster();
+const down = new THREE.Vector3(0, -1, 0);
+const rodMeshes = rodGroup.children.filter(m => m.userData.plan);
+const offRoof = rodMeshes.filter(mesh => {
+  // Nudge 1 mm towards the centre: a rod placed exactly on a corner would
+  // otherwise send its ray along the roof's edge, where a hit is not reliable.
+  const dx = centre.x - mesh.position.x, dz = centre.z - mesh.position.z;
+  const len = Math.hypot(dx, dz) || 1;
+  const from = new THREE.Vector3(
+    mesh.position.x + (dx / len) * 1e-3,
+    buildingHeight + 100,
+    mesh.position.z + (dz / len) * 1e-3,
+  );
+  ray.set(from, down);
+  const hit = ray.intersectObject(building)[0];
+  return !hit || Math.abs(hit.point.y - buildingHeight) > 1e-3;
+}).map(mesh => mesh.userData.plan);
+const checkEl = document.getElementById('stat-check');
+if (offRoof.length > 0) {
+  console.error('rods not on the roof:', offRoof);
+  checkEl.textContent = `check: ${offRoof.length} rod(s) off the roof`;
+  checkEl.style.color = '#ff6b6b';
+} else {
+  checkEl.textContent = 'check: all rods on roof';
+}
 
 // ── stats overlay ─────────────────────────────────────────────────────────────
 
