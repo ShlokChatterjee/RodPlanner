@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { planToWorld } from './coords.js';
 
 /**
  * Build an extruded mesh from a polygon footprint.
@@ -8,14 +9,26 @@ import * as THREE from 'three';
  * @returns {THREE.Mesh}
  */
 export function buildBuilding(polygon, height) {
+  // ExtrudeGeometry draws a 2D shape in its own XY plane and extrudes along +Z.
+  // We then rotate the mesh by -90° about X so it stands on the ground:
+  //   shape (sx, sy, sz)  →  world (sx, sz, -sy)
+  // So a shape point (sx, sy) lands at world x = sx, world z = -sy.
+  // To land on planToWorld's z, we need sy = -world.z.
+  const toShape = ([x, y]) => {
+    const w = planToWorld(x, y);
+    return [w.x, -w.z];
+  };
+
   const shape = new THREE.Shape();
-  // Plan coords: x→right, y→forward.  ExtrudeGeometry works in XY, so we
-  // use plan-x as shape-x and plan-y as shape-y, then rotate the mesh.
-  shape.moveTo(polygon[0][0], polygon[0][1]);
+  const [x0, y0] = toShape(polygon[0]);
+  shape.moveTo(x0, y0);
   for (let i = 1; i < polygon.length; i++) {
-    shape.lineTo(polygon[i][0], polygon[i][1]);
+    const [sx, sy] = toShape(polygon[i]);
+    shape.lineTo(sx, sy);
   }
   shape.closePath();
+  // Negating y reverses the winding order (clockwise vs anticlockwise).
+  // ExtrudeGeometry detects winding itself, so this needs no extra handling.
 
   const geometry = new THREE.ExtrudeGeometry(shape, {
     depth: height,
@@ -29,9 +42,7 @@ export function buildBuilding(polygon, height) {
   });
 
   const mesh = new THREE.Mesh(geometry, material);
-  // Rotate so the shape lies flat on the XZ plane and extrudes upward (Y).
-  // ExtrudeGeometry extrudes along +Z by default; after rotation +Z→+Y.
-  mesh.rotation.x = -Math.PI / 2;
+  mesh.rotation.x = -Math.PI / 2;  // shape XY plane → ground XZ plane, +Z → +Y
   mesh.castShadow = true;
   mesh.receiveShadow = true;
 
