@@ -152,3 +152,67 @@ coverage math, and we can unit-test the coverage function alone.
 | **Protection cone model** | A rod at height h protects a circle of radius r = h × tan(α) on the roof surface |
 
 ---
+
+## Checkpoint 2 — Placement algorithm (greedy set cover)
+
+**Date:** 2026-11-02
+
+### What we built
+
+| File | Purpose |
+|------|---------|
+| `src/rodplanner/placement/models.py` | `Rod` and `PlacementParams` dataclasses |
+| `src/rodplanner/placement/greedy.py` | `place_rods()` — greedy set cover algorithm |
+| `src/rodplanner/placement/metrics.py` | `coverage_fraction()` — measures how well rods cover the roof |
+| `tests/placement/test_greedy.py` | 7 tests |
+| `tests/placement/test_metrics.py` | 6 tests |
+
+**Total: 39 tests passing. Lint: clean.**
+
+### Key decisions and why
+
+**1. Greedy set cover (not optimal, but good enough)**
+At each step: place the rod that covers the most currently-uncovered points.
+Repeat until everything is covered. Greedy set cover is guaranteed to achieve
+full coverage and runs fast. It may use ~63% more rods than the theoretical minimum
+in the worst case, but in practice on building roofs it is close to optimal.
+
+*What we rejected:*
+- **ILP (Integer Linear Programming)**: finds the true minimum rod count, but requires
+  a solver library and is much slower. Overkill for v1.
+- **Random/Monte Carlo**: non-deterministic — two runs on the same roof give different
+  results. Bad for a reproducible design tool.
+
+**2. Precomputed coverage matrix**
+We compute the full `(N_candidates x N_points)` boolean grid once before the loop.
+Each greedy iteration then only sums a row (fast) instead of recomputing distances
+for every candidate on every step. Trade-off: more memory upfront. For a 50x50m roof
+at 1m resolution: ~2500 x 2500 = ~6MB — acceptable for v1.
+
+**3. Corners as explicit candidates**
+Polygon corner vertices are added to the candidate list alongside the interior grid.
+This ensures a rod can be placed exactly at a corner, the most exposed point on the
+building outline.
+
+**4. Frozen dataclasses**
+`@dataclass(frozen=True)` makes `Rod` and `PlacementParams` immutable after creation.
+Right for result data that should not change. Also makes them hashable (usable in
+sets and as dict keys).
+
+**5. `coverage_fraction` separate from placement**
+Measuring how well rods cover the roof is a distinct concern from placing them.
+Keeping it in `metrics.py` means we can validate hand-placed layouts (Checkpoint 6)
+without touching the placement algorithm.
+
+### Vocabulary to know
+
+| Term | Meaning |
+|------|---------|
+| **Set cover** | Find the fewest sets whose union covers all elements |
+| **Greedy algorithm** | Makes the locally best choice at each step; fast but not always globally optimal |
+| **Coverage matrix** | 2D boolean array: `[i, j] = True` means candidate i covers sample point j |
+| **ILP** | Integer Linear Programming — mathematically optimal but computationally expensive |
+| **Frozen dataclass** | Python dataclass where all fields are read-only after creation (`frozen=True`) |
+| **`coverage_fraction`** | Fraction of roof sample points protected by at least one rod (0.0-1.0) |
+
+---
