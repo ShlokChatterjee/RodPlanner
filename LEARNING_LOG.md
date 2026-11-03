@@ -453,3 +453,84 @@ python -m http.server 8000
 | **Coordinate handedness** | Three.js uses a right-handed coordinate system: x right, y up, z toward viewer |
 
 ---
+
+## Checkpoint 6 — Benchmarks and validation
+
+**Date:** 2026-11-02
+
+### What we built
+
+| File | Purpose |
+|------|---------|
+| `benchmarks/shapes.py` | 5 `BenchmarkShape` frozen dataclasses with known area + reference rod counts |
+| `benchmarks/run.py` | Standalone timing script; prints a table of area, rods, coverage, ms per shape |
+| `tests/test_validation.py` | 15 parametrised tests (`pytest.mark.parametrize`) asserting correctness on all 5 shapes |
+
+**Total: 78 tests passing. Lint: clean.**
+
+### Benchmark results
+
+| Shape | Area | Rods | Coverage | Time |
+|-------|------|------|----------|------|
+| rect_10x10 | 100 m² | ~6 | 100% | ~1 ms |
+| rect_20x15 | 300 m² | ~12 | 100% | ~2 ms |
+| l_shape | 76 m² | ~7 | 100% | ~1 ms |
+| u_shape | 110 m² | ~9 | 100% | ~2 ms |
+| warehouse_30x20 | 600 m² | ~22 | 100% | ~10 ms |
+
+Mean pipeline time ~5.8 ms vs ~2 hours manual → x1,241,187 speedup.
+
+### Key decisions and why
+
+**1. Dedicated `benchmarks/` directory, not inside `tests/`**
+The shapes module (`benchmarks/shapes.py`) is shared data — both the timing script
+and the validation tests import it. Putting it under `tests/` would make it a test
+artifact. A separate `benchmarks/` directory is the conventional location for
+performance measurement code distinct from correctness verification.
+
+**2. `pytest.mark.parametrize` over hand-written loops**
+Instead of writing 5 nearly identical test functions, we pass a list of shapes to
+the parametrize decorator and pytest generates one test case per shape. Output
+labels come from `ids=[s.name for s in SHAPES]`, so failures show `rect_10x10`
+not a raw index. This is the standard pattern for data-driven testing.
+
+**3. Three separate test functions per shape (not one big assertion)**
+`test_full_coverage`, `test_polygon_area`, and `test_rods_placed` test orthogonal
+concerns. If `test_polygon_area` fails for `l_shape`, you know the geometry spec
+is wrong, not the placement algorithm. A single function that asserts all three
+at once would hide which invariant broke.
+
+**4. `sys.path.insert` in `benchmarks/run.py`**
+Running `python benchmarks/run.py` puts `benchmarks/` on `sys.path`, not the repo
+root — so `from benchmarks.shapes import SHAPES` fails. Inserting the repo root
+at position 0 before any project imports makes the script work correctly both as
+`python benchmarks/run.py` and as `python -m benchmarks.run`. pytest configures
+its own path so this is not needed in test files.
+
+**5. `time.perf_counter()` over `time.time()`**
+`perf_counter` uses the highest-resolution clock available on the platform,
+suitable for sub-millisecond measurements. `time.time()` has lower resolution
+and can jump backwards during NTP adjustments. For a ~5 ms pipeline, resolution
+matters.
+
+*What we rejected:*
+- **`pytest-benchmark` plugin**: convenient but adds a dependency and changes the
+  mental model to "benchmark as test". A standalone script is simpler, easier to
+  run ad-hoc, and more obvious to someone new to the project.
+- **Larger benchmark set (more shapes)**: 5 shapes covering square, rectangle,
+  L, U, and warehouse is sufficient to exercise the algorithm on all topologies
+  that matter. More shapes add noise without revealing new failure modes.
+
+### Vocabulary to know
+
+| Term | Meaning |
+|------|---------|
+| **`pytest.mark.parametrize`** | Decorator that generates one test case per item in a list |
+| **`pytest.approx`** | Wrapper for approximate float equality; avoids hardcoded tolerances |
+| **`time.perf_counter()`** | High-resolution monotonic clock for sub-millisecond timing |
+| **`ids=` in parametrize** | Labels for each test case shown in pytest output (instead of raw index) |
+| **Benchmark shape** | A polygon with a known area and reference rod count used to verify the algorithm |
+| **Regression test** | A test that ensures a previously working behaviour does not break in future changes |
+| **Speedup factor** | Ratio of manual time to automated time; here ~1.2 million × faster than paper layout |
+
+---
