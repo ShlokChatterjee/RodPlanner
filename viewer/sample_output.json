@@ -1,0 +1,20 @@
+{
+  "polygon": [[0.0,0.0],[20.0,0.0],[20.0,15.0],[0.0,15.0]],
+  "rods": [
+    {"x": 2.5,  "y": 2.5,  "height": 3.0, "radius": 3.0},
+    {"x": 7.5,  "y": 2.5,  "height": 3.0, "radius": 3.0},
+    {"x": 12.5, "y": 2.5,  "height": 3.0, "radius": 3.0},
+    {"x": 17.5, "y": 2.5,  "height": 3.0, "radius": 3.0},
+    {"x": 2.5,  "y": 7.5,  "height": 3.0, "radius": 3.0},
+    {"x": 7.5,  "y": 7.5,  "height": 3.0, "radius": 3.0},
+    {"x": 12.5, "y": 7.5,  "height": 3.0, "radius": 3.0},
+    {"x": 17.5, "y": 7.5,  "height": 3.0, "radius": 3.0},
+    {"x": 2.5,  "y": 12.5, "height": 3.0, "radius": 3.0},
+    {"x": 7.5,  "y": 12.5, "height": 3.0, "radius": 3.0},
+    {"x": 12.5, "y": 12.5, "height": 3.0, "radius": 3.0},
+    {"x": 17.5, "y": 12.5, "height": 3.0, "radius": 3.0}
+  ],
+  "coverage_fraction": 1.0,
+  "rod_count": 12,
+  "area_m2": 300.0
+}
