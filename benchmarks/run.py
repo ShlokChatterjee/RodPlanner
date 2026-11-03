@@ -17,13 +17,12 @@ from pathlib import Path
 # `python benchmarks/run.py` and `python -m benchmarks.run` work.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from benchmarks.shapes import SHAPES
 from rodplanner.geometry.polygon import make_polygon
 from rodplanner.geometry.sampling import sample_grid
 from rodplanner.placement.greedy import place_rods
 from rodplanner.placement.metrics import coverage_fraction
 from rodplanner.placement.models import PlacementParams
-
-from benchmarks.shapes import SHAPES
 
 # ── parameters ────────────────────────────────────────────────────────────────
 
@@ -70,7 +69,10 @@ def _run_one(shape_polygon: list[tuple[float, float]]) -> dict[str, object]:
 def main() -> None:
     print("\n  rodplanner - placement benchmark")
     print("  " + "-" * 66)
-    print(f"  {'shape':<18} {'area':>7}  {'rods':>5}  {'ref':>4}  {'cov':>7}  {'time':>8}")
+    print(
+        f"  {'shape':<18} {'area':>7}  {'rods':>5}"
+        f"  {'ref':>4}  {'cov':>7}  {'time':>8}"
+    )
     print("  " + "-" * 66)
 
     total_times: list[float] = []
