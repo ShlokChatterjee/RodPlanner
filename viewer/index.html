@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>rodplanner — 3D viewer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0f1117; overflow: hidden; }
+    canvas { display: block; }
+
+    #overlay {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      background: rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: #e8e8e8;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.7;
+      pointer-events: none;
+    }
+    #overlay strong { color: #7eb8f7; }
+
+    #legend {
+      position: absolute;
+      bottom: 16px;
+      left: 16px;
+      display: flex;
+      gap: 16px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      color: #aaa;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .swatch {
+      width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0;
+    }
+    .swatch-building { background: #6e8fa8; }
+    .swatch-rod      { background: #ffd700; }
+    .swatch-cone     { background: rgba(80,160,255,0.4); border: 1px solid #4499ff; }
+
+    #hint {
+      position: absolute;
+      bottom: 16px;
+      right: 16px;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      color: #555;
+      text-align: right;
+      line-height: 1.8;
+    }
+  </style>
+
+  <!-- Import map: tells the browser where to find Three.js by name -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.165.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.165.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="overlay">
+    <strong>rodplanner</strong><br>
+    <span id="stat-rods">rods: —</span><br>
+    <span id="stat-coverage">coverage: —</span><br>
+    <span id="stat-area">area: —</span>
+  </div>
+
+  <div id="legend">
+    <div class="legend-item"><div class="swatch swatch-building"></div>building</div>
+    <div class="legend-item"><div class="swatch swatch-rod"></div>lightning rod</div>
+    <div class="legend-item"><div class="swatch swatch-cone"></div>protection cone</div>
+  </div>
+
+  <div id="hint">
+    left-drag: orbit &nbsp;|&nbsp; right-drag: pan &nbsp;|&nbsp; scroll: zoom
+  </div>
+
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
